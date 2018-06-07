@@ -27,7 +27,42 @@ div.help div {
 
 table.rewards div {
 	cursor: pointer;
+	border-width: 1px;
+	border-style: dotted;
+	border-color: transparent;
 }
+
+table.rewards div:hover {
+	border-color: black;
+}
+
+table.rewards tr:hover td.relic {
+	background: #ffe0e0;
+}
+
+.tt_item, .tt_sub {
+	font-weight: bold;
+}
+
+/* "popup menu" */
+.popup {
+	display: none;
+	position: absolute;
+	z-index: 1;
+	background-color: #f1f1f1;
+	min-width: 160px;
+	border-width: 1px;
+	border-style: solid;
+}
+
+.popup a {
+	display: block;
+	text-decoration: none;
+	padding: 6px 16px;
+}
+
+.popup a:hover { background-color: #ddd; }
+
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
@@ -293,26 +328,82 @@ function parse(query) {
 }
 
 
-function item_clicked(event, item, sub) {
-	var url = '';
-	if (event.shiftKey) {
-		// navigate to warframe wiki page
-		var cname = item.split(' ').map(function (it, idx, arr) { return it.charAt(0).toUpperCase() + it.slice(1); }).join('_')
-		          + (class_of(item) == 'warframe' ? '/' : '_') + 'Prime';
-		url = 'http://warframe.wikia.com/wiki/' + escape(cname);
-	} else if (item != 'forma') {
-		// navigate to market page
-		var cname = item + ' prime ' + ab_decode(sub);
-		switch (class_of(item)) {
-		case 'warframe':
-		case 'archwing':
-			if (sub != 'bp')
-				cname = cname.replace(' blueprint', '');
-			break;
-		}
-		url = 'https://warframe.market/items/' + cname.replace(/ /g, '_');
+function wiki_url(item, sub)
+{
+	var cname = item.split(' ').map(function (it, idx, arr) { return it.charAt(0).toUpperCase() + it.slice(1); }).join('_')
+		  + (class_of(item) == 'warframe' ? '/' : '_') + 'Prime';
+	return 'http://warframe.wikia.com/wiki/' + escape(cname);
+}
+
+/* return url of market page for corresponding item and subtype */
+function market_url(item, sub)
+{
+	var cname = item + ' prime ' + ab_decode(sub);
+	switch (class_of(item)) {
+	case 'warframe':
+	case 'archwing':
+		if (sub != 'bp')
+			cname = cname.replace(' blueprint', '');
+		break;
 	}
-	window.open(url, '_blank');
+	return 'https://warframe.market/items/' + cname.replace(/ /g, '_');
+}
+
+/* Capitalize words separated by spaces */
+function capitalize(str)
+{
+	return str.split(' ').map(function (it, idx, arr) { return it.charAt(0).toUpperCase() + it.slice(1); }).join(' ');
+}
+
+/* Capitalize and add 'Prime' suffix */
+function pretty_prime_name(item)
+{
+	return item == 'forma'
+		? 'Forma'
+		: capitalize(item) + ' Prime';
+
+}
+
+function pretty_sub_name(item, sub)
+{
+	if (item == 'forma')
+		return 'Forma';
+	return capitalize(item + ' prime ' + ab_decode(sub));
+}
+
+function hide_popup()
+{
+	$('#popup').hide();
+	return true;
+}
+
+function item_clicked(event, item, sub)
+{
+	/* build canonical item name */
+	$('.tt_item').text(pretty_prime_name(item));
+	$('.tt_sub').text(pretty_sub_name(item, sub));
+	$('#popup').hide();
+	/* prepare menu */
+	// navigate to warframe wiki page
+	$('#popup_wiki')
+		.attr('href', wiki_url(item, sub))
+		.click(hide_popup);
+	$('#popup_market')
+		.attr('href', market_url(item, sub))
+		.click(hide_popup);
+	$('#popup_prime').click(function() {
+		$('#query').val('#' + item);
+		$('#popup').hide();
+		process();
+		return false;
+	});
+	$('#popup_part').click(function() {
+		$('#query').val('#' + item + '/' + sub);
+		$('#popup').hide();
+		process();
+		return false;
+	});
+	$('#popup').css({'position': 'fixed', 'left': event.pageX, 'top': event.pageY}).show();
 }
 
 function pred_apply(pred) {
@@ -328,21 +419,12 @@ function pred_apply(pred) {
 	return out;
 }
 
-function translate()
-{
-	query = $(this).val();
-	//alert($('#wtb'));
-	//alert($('#query').value);
-	//$('#wtb').value = $(this).value;
-}
-
-
 function process() {
 	var pred = parse($('#query').val());
 	var out = pred_apply(pred);
 	var html = "<table class=\"rewards\"><tr><th>Relic</th><th>Rare</th><th>Uncommon</th><th>Common</th>";
 	out.forEach(function(r, idx, arr) {
-		html += "<tr><td>" + r.era + "&nbsp;" + r.name.toUpperCase();
+		html += "<tr><td class=\"relic\">" + r.era + "&nbsp;" + r.name.toUpperCase();
 		var rt = [new Array(), new Array(), new Array()];
 		r.loot.forEach(function(l, idx, arr) {
 			rt[l[0]].push("<div onclick=\"item_clicked(event, '" + l[1] + "', '" + l[2] + "')\">" + l[1] + "/" + l[2] + "</div>");
@@ -365,6 +447,11 @@ $(document).ready(function() {
 	});
 	$("#helpme").click(function() {
 		$("#help").toggle();
+	});
+	$(window).click(function(event) {
+		if (!event.target.matches('table.rewards div'))
+			hide_popup();
+		return true;
 	});
 });
 </script>
@@ -439,14 +526,14 @@ m#trinity   → показать все части Тринити из мезо-
 	<label for="query">WTB query:</label>
 	<td>
 	<input id="query" type="text" autofocus></input>
-<tr>
+<!--tr>
 	<td>
 	<label for="lang">Language:</label>
 	<td>
 	<select id="lang">
 		<option value="en">English</option>
 		<option value="ru">Russian</option>
-	</select>
+	</select-->
 <tr>
 	<td>
 	<button id="test">Copy</button>
@@ -460,6 +547,13 @@ m#trinity   → показать все части Тринити из мезо-
 </table>
 
 <div id="out">
+</div>
+
+<div id="popup" class="popup">
+	<a id="popup_market" href="#" target="_blank"><span class="tt_sub"></span> on warframe.market</a>
+	<a id="popup_wiki" href="#" target="_blank"><span class="tt_item"></span> on Warframe wiki</a>
+	<a id="popup_prime" href="#">Relics with <span class="tt_item"></span></a>
+	<a id="popup_part" href="#">Relics with <span class="tt_sub"></span></a>
 </div>
 
 </body>
