@@ -2,15 +2,26 @@
 import lxml.etree as etree
 import lxml.html
 import sys
+import collections
+import json
 
 part_abname = {'blueprint': 'bp',
                'systems blueprint' : 'sys',
                'chassis blueprint': 'cha',
                'neuroptics blueprint': 'neu',
+               'harness blueprint': 'har',
+               'wings blueprint': 'win',
                'barrel': 'ba',
                'receiver' : 're',
                'stock' : 'st',
                 }
+
+klassifier = {'sys':   'warframe',
+              'win':   'archwing',
+              'ba':    'weapon',
+              'hilt':  'weapon',
+              'blade': 'weapon',
+              }
 
 rarity_a2i = {'Rare (2.00%)': 2, 'Uncommon (11.00%)': 1, 'Uncommon (25.33%)': 0}
 
@@ -101,6 +112,15 @@ def parse_relics(t):
     return relics
 
 
+# Prepare function to classify items by name
+def build_classifier(rr):
+    cls = dict()
+    for r in rr:
+        for l in r.drop:
+            if klassifier.get(l[2]):
+                cls[l[1]] = klassifier[l[2]]
+    return cls
+
 doc = lxml.html.parse(sys.argv[1])
 root = doc.getroot()
 r = root.xpath("//h3[text() = 'Relics:']")
@@ -110,5 +130,14 @@ print("function build_pool() { return [");
 for r in rr:
     print("  {era: '%s', name: '%s', loot: %s}," % (r.era, r.name, r.loot()))
 print("];}")
+
+# Now make classifier function
+classifier = build_classifier(rr)
+print('var klassifier = ' + json.dumps(classifier) + ';')
+print('function class_of(item) { return klassifier[item]; }')
+
+# Make 'unabbrev' function
+print('var unabb = ' + json.dumps(dict((v,k) for k,v in part_abname.items())) + ';')
+print('function ab_decode(ab) { return unabb[ab] || ab; }')
 
 #print(etree.tostring(n, pretty_print=True))

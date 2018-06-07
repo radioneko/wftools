@@ -24,6 +24,10 @@ div.help div {
 	padding: 2px;
 	margin: 4px 2em;
 }
+
+table.rewards div {
+	cursor: pointer;
+}
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
@@ -182,7 +186,7 @@ function PredicateItem(name) {
 	this.check = function(relic) {
 		var val = this.name;
 		return filter_loot(relic, function(rarity, item, type) {
-			return item == val;
+			return item == val || item.substring(0, val.length + 1) == val + ' ';
 		});
 	}
 	this.print = function() {
@@ -289,6 +293,21 @@ function parse(query) {
 }
 
 
+function item_clicked(event, item, sub) {
+	var url = '';
+	if (event.shiftKey) {
+		// navigate to warframe wiki page
+		var cname = item.split(' ').map(function (it, idx, arr) { return it.charAt(0).toUpperCase() + it.slice(1); }).join('_')
+		          + (class_of(item) == 'warframe' ? '/' : '_') + 'Prime';
+		url = 'http://warframe.wikia.com/wiki/' + escape(cname);
+	} else if (item != 'forma') {
+		// navigate to market page
+		var cname = item + ' prime ' + ab_decode(sub);
+		url = 'https://warframe.market/items/' + cname.replace(/ /g, '_');
+	}
+	window.open(url, '_blank');
+}
+
 function pred_apply(pred) {
 	var p = build_pool();
 	var out = new Array();
@@ -314,15 +333,15 @@ function translate()
 function process() {
 	var pred = parse($('#query').val());
 	var out = pred_apply(pred);
-	var html = "<table><tr><th>Relic</th><th>Rare</th><th>Uncommon</th><th>Common</th>";
+	var html = "<table class=\"rewards\"><tr><th>Relic</th><th>Rare</th><th>Uncommon</th><th>Common</th>";
 	out.forEach(function(r, idx, arr) {
 		html += "<tr><td>" + r.era + "&nbsp;" + r.name.toUpperCase();
 		var rt = [new Array(), new Array(), new Array()];
 		r.loot.forEach(function(l, idx, arr) {
-			rt[l[0]].push(l[1] + "/" + l[2]);
+			rt[l[0]].push("<div onclick=\"item_clicked(event, '" + l[1] + "', '" + l[2] + "')\">" + l[1] + "/" + l[2] + "</div>");
 		});
 		for (var i = 2; i >= 0; i--)
-			html += '<td class="r' + i + '">' + rt[i].join('<br>');
+			html += '<td class="r' + i + '">' + rt[i].join('');
 	});
 	html += "</table>";
 	$("#out").html(html);
