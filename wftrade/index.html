@@ -1,0 +1,440 @@
+<html>
+<head>
+<title>Warframe trade text generator</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style>
+td.r2 {
+	background: #ede268;
+}
+td.r1 {
+	background: #e6e6e6;
+}
+td.r0 {
+	background: #9c7520;
+}
+div.help li span {
+	font-family: monospace;
+	background: #e0e0e0;
+	padding: 2px;
+}
+div.help div {
+	display: inline-block;
+	font-family: monospace;
+	background: #e0e0e0;
+	padding: 2px;
+	margin: 4px 2em;
+}
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script src="pool.js"></script>
+
+<script language="javascript">
+
+var loc_ru = {axi: 'акси',// l_axi: 'реликвия акси',
+			  neo: 'нео',
+			  meso: 'мезо',
+			  lith: 'лит',
+			  cost_each: function(cost) { return 'по ' + cost.toString() + 'п'; },
+			  cost_pack: function(cost) { return '5к' + cost.toString(); },
+			 };
+var loc_en = {axi: 'Axi',
+			  neo: 'Neo',
+			  meso: 'Meso',
+			  lith: 'Lith',
+			  cost_each: function(cost) { return cost.toString() + 'p each'; },
+			  cost_pack: function(cost) { return '5:' + cost.toString() + 'p'; },
+			 }
+
+
+var rarity_map = new Map([
+	["rare", 2],     ["r", 2], ["2", 2],
+	["uncommon", 1], ["u", 1], ["1", 1],
+	["common", 0],   ["c", 0], ["0", 0]
+]);
+
+var era_map = new Map([
+	["axi", "axi"], ["a", "axi"],
+	["neo", "neo"], ["n", "neo"],
+	["meso", "meso"], ["m", "meso"],
+	["lith", "lith"], ["l", "lith"]
+]);
+
+function push_relics(bo, arr, name) {
+	if (arr.length) {
+		bo.push(name + ' ' + arr.join('/'));
+	}
+}
+
+
+function RelicPack()
+{
+	this.axi = new Array();
+	this.neo = new Array();
+	this.meso = new Array();
+	this.lith = new Array();
+	this.add = function(relic) {
+		var arr = undefined;
+		switch (relic.era) {
+			case 'axi':		arr = this.axi; break;
+			case 'neo':		arr = this.neo; break;
+			case 'meso':	arr = this.meso; break;
+			case 'lith':	arr = this.lith; break;
+		}
+		relic_id = relic.name.toUpperCase();
+		for (var i = 0; i < arr.length; i++) 
+			if (arr[i] == relic_id)
+				break;
+		if (i == arr.length) {
+			arr.push(relic_id);
+			arr.sort();
+		}
+		return this;
+	}
+	this.str = function(l18n) {
+		var relics = new Array();
+		push_relics(relics, this.axi, l18n.axi);
+		push_relics(relics, this.neo, l18n.neo);
+		push_relics(relics, this.meso, l18n.meso);
+		push_relics(relics, this.lith, l18n.lith);
+		return relics.join(', ');
+	}
+}
+
+
+// deeply clone relic object
+function dup(relic) {
+	return JSON.parse(JSON.stringify(relic));
+}
+
+
+// merge loot table by removing duplicates
+function merge_loot_tables(aloot) {
+	var m = new Map();
+	aloot.forEach(function(loot, idx, arr) {
+		loot.forEach(function(item, idx, arr) {
+			m.set(JSON.stringify(item), item);
+		})
+	})
+	var loot = new Array();
+	m.forEach(function(val, key, map) {
+		loot.push(val);
+	})
+	return loot;
+}
+
+// return false if filter returned empty loot list or relic copy
+function filter_loot(relic, filter) {
+	var items = relic.loot.filter(function(x) {
+		return filter(x[0], x[1], x[2]);
+	});
+	if (items.length == 0)
+		return false;
+	//console.log(relic.era + " " + relic.name + ": " + items.join('; '));
+	var filtered = dup(relic);
+	filtered.loot = items;
+	return filtered;
+}
+
+
+function PredicateEra(era) {
+	this.era = era.toLowerCase();
+	this.check = function(relic) {
+		if (relic.era == this.era)
+			return relic;
+		return false;
+	}
+	this.print = function() {
+		return "era == " + this.era;
+	}
+}
+
+
+function PredicateRelic(rid) {
+	this.era = era_map.get(rid.charAt(0));
+	this.name = rid.substring(1);
+	this.check = function(relic) {
+		if (relic.era == this.era && relic.name == this.name)
+			return relic;
+		return false;
+	}
+	this.print = function() {
+		return this.era + " " + this.name.toUpperCase();
+	}
+}
+
+
+function PredicateName(name) {
+	this.name = name.toLowerCase(name);
+	this.check = function(relic) {
+		if (relic.name == this.name)
+			return relic;
+		return false;
+	}
+	this.print = function() {
+		return "name == " + this.name;
+	}
+}
+
+// filter loot table by item name
+function PredicateItem(name) {
+	this.name = name.toLowerCase();
+	this.check = function(relic) {
+		var val = this.name;
+		return filter_loot(relic, function(rarity, item, type) {
+			return item == val;
+		});
+	}
+	this.print = function() {
+		return '#' + this.name;
+	}
+}
+
+// filter loot table by item type
+function PredicateType(type) {
+	this.type = type.toLowerCase();
+	this.check = function(relic) {
+		var val = this.type;
+		return filter_loot(relic, function(rarity, item, type) {
+			return type == val;
+		});
+	};
+	this.print = function() {
+		return "/" + this.type;
+	}
+}
+
+// filter loot table by item rarity
+function PredicateRarity(rty) {
+	if (rarity_map.has(rty)) {
+		this.rty = rarity_map.get(rty);
+		this.check = function(relic) {
+			var rty = this.rty;
+			return filter_loot(relic, function(rarity, item, type) {
+				return rarity == rty;
+			});
+		};
+		this.print = function() { return "@" + ["common", "uncommon", "rare"][this.rty]; }
+	} else {
+		this.check = function(relic) { return false; };
+		this.print = function() { return "BAD_RARITY"; }
+	}
+}
+
+function PredicateAll() {
+	this.cond = new Array();
+	this.check = function(relic) {
+		var loot = new Array();
+		var success = true;
+		this.cond.forEach(function(pred, arr) {
+			if (success) {
+				var r = pred.check(relic);
+				if (r)
+					loot.push(r.loot);
+				else
+					success = false;
+			}
+		});
+		if (!success)
+			return false;
+		var r = dup(relic);
+		r.loot = merge_loot_tables(loot);
+		return r;
+	}
+	this.push = function(pred) {
+		this.cond.push(pred);
+	}
+}
+
+function predicate_from_token(token)
+{
+	switch (token.charAt(0)) {
+	case '#':	return new PredicateItem(token.substring(1));
+	case '@':   return new PredicateRarity(token.substring(1));
+	case '/':   return new PredicateType(token.substring(1));
+	}
+	if (era_map.has(token))
+		return new PredicateEra(era_map.get(token));
+	if (token.length == 3 && era_map.has(token.charAt(0))) {
+		return new PredicateRelic(token);
+	}
+	if (token.length == 2) {
+		return new PredicateName(token);
+	}
+}
+
+// parse query into array of orders
+// nv1:10 #nyx/cha,neu:10 #ash/bp@u:5
+// n#nova => neo relics with nova parts
+// #ash@u => relics with uncommon ash parts
+// a#ash@u => axi relics with uncommon ash parts
+// #nyx@r,u => relics with nyx rare and uncommon parts
+function parse(query) {
+	var pred = new Array();
+	/* "tokenize" query string */
+	var tokens = new Array();
+	var token = "";
+	for (var i = 0; i < query.length; i++) {
+		var ch = query.charAt(i);
+		if ((ch == '#' || ch == '/' || ch == '@') && token.length > 0) {
+			pred.push(predicate_from_token(token));
+			token = "";
+		}
+		token += ch;
+	}
+	if (token.length > 0)
+		pred.push(predicate_from_token(token));
+
+	return pred;
+}
+
+
+function pred_apply(pred) {
+	var p = build_pool();
+	var out = new Array();
+	p.forEach(function(value, arr) {
+		var r = pred.reduce(function(state, predicate, idx, arr) {
+			return state ? predicate.check(state) : false;
+		}, value);
+		if (r)
+			out.push(r);
+	});
+	return out;
+}
+
+function translate()
+{
+	query = $(this).val();
+	//alert($('#wtb'));
+	//alert($('#query').value);
+	//$('#wtb').value = $(this).value;
+}
+
+
+function process() {
+	var pred = parse($('#query').val());
+	var out = pred_apply(pred);
+	var html = "<table><tr><th>Relic</th><th>Rare</th><th>Uncommon</th><th>Common</th>";
+	out.forEach(function(r, idx, arr) {
+		html += "<tr><td>" + r.era + "&nbsp;" + r.name.toUpperCase();
+		var rt = [new Array(), new Array(), new Array()];
+		r.loot.forEach(function(l, idx, arr) {
+			rt[l[0]].push(l[1] + "/" + l[2]);
+		});
+		for (var i = 2; i >= 0; i--)
+			html += '<td class="r' + i + '">' + rt[i].join('<br>');
+	});
+	html += "</table>";
+	$("#out").html(html);
+}
+
+
+$(document).ready(function() {
+	$("#query").on({
+		keyup: function(event) {
+			if (event.keyCode == 13)
+				process();
+		},
+		blur: process
+	});
+	$("#helpme").click(function() {
+		$("#help").toggle();
+	});
+});
+</script>
+
+</head>
+
+<body>
+
+Поиск по актуальной базе реликвий.&nbsp;<button id="helpme">WTF???</button>
+<br>
+<div class="help" id="help" style="display:none">
+Синтаксис:
+<ul>
+	<li><span>эра</span>&nbsp;—&nbsp;отобразит все реликвии указанной эры
+	<br><div>
+	axi → показать реликвии акси эры<br>
+	a   → то же самое
+	</div>
+
+	<li><span>реликвия</span>&nbsp;-&nbsp;поиск по имени реликвии, можно не указывать эру,
+	принимается только сокращенный вариант название (однобуквенная эра)
+	<br><div>
+	n1  → показать все реликвии с именем N1 (на момент написания N1 есть в лит, мезо, нео и акси)<br>
+	mn1 → показать Meso N1
+	</div>
+
+	<li><span>#имя</span>&nbsp;-&nbsp;поиск по названию прайма. Пока работает по полному совпадению,
+	т. е. надо написать "#silva&nbsp;&amp;&nbsp;aegis", а не просто "#silva". "Prime" писать не
+	нужно&nbsp;—&nbsp;это подразумевается.
+	<br><div>
+	#nekros → найти все части некроса<br>
+	#ash    → найти все части эша
+	</div>
+
+	<li><span>/тип</span>&nbsp;—&nbsp;фильтр по типу шмотки. Понимает
+	<ul>
+		<li><span>bp</span>&nbsp;—&nbsp;чертеж aka blueprint
+		<li><span>cha</span>&nbsp;—&nbsp;каркас aka chassis
+		<li><span>neu</span>&nbsp;—&nbsp;нейрооптика aka neuroptics
+		<li><span>sys</span>&nbsp;—&nbsp;каркас aka chassis
+		<li><span>ba</span>&nbsp;-&nbsp;ствол aka barrel
+		<li><span>re</span>&nbsp;-&nbsp;приемник aka receiver
+		<li><span>st</span>&nbsp;-&nbsp;приклад aka stock
+	</ul>
+	<div>
+	/neu  → найти все нейрооптики<br>
+	/hilt → найти все рукояти
+	</div>
+
+	<li><span>@редкость</span>&nbsp;-&nbsp;отфильтровать дроп по редкости. Редкость задается одной буквой:
+	<ul>
+		<li><span>r</span>&nbsp;—&nbsp;редкое aka rare
+		<li><span>u</span>&nbsp;—&nbsp;необычное aka uncommon
+		<li><span>c</span>&nbsp;—&nbsp;обычное aka common
+	</ul>
+	<div>
+	@r → показать все редкие вещи
+	</div>
+</ul>
+
+По отдельности все эти штуки не шибко полезны, но их можно комбинировать!<br>
+<div>
+#nyx@r      → найти все редкие части Никс<br>
+#ash/sys@u  → показать uncommon систему Эша<br>
+m#trinity   → показать все части Тринити из мезо-эры
+</div>
+</div>
+
+<table>
+<tr>
+	<td>
+	<label for="query">WTB query:</label>
+	<td>
+	<input id="query" type="text" autofocus></input>
+<tr>
+	<td>
+	<label for="lang">Language:</label>
+	<td>
+	<select id="lang">
+		<option value="en">English</option>
+		<option value="ru">Russian</option>
+	</select>
+<tr>
+	<td>
+	<button id="test">Copy</button>
+	<td>
+	<textarea id="wtb" disabled="true"></textarea>
+<tr>
+	<td>
+	<button>Copy</button>
+	<td>
+	<textarea id="wtb_ru" disabled="true"></textarea>
+</table>
+
+<div id="out">
+</div>
+
+</body>
+</html>
