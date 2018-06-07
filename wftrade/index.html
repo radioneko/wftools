@@ -379,6 +379,8 @@ function hide_popup()
 
 function item_clicked(event, item, sub)
 {
+	event.preventDefault();
+	event.stopPropagation();
 	/* build canonical item name */
 	$('.tt_item').text(pretty_prime_name(item));
 	$('.tt_sub').text(pretty_sub_name(item, sub));
@@ -434,6 +436,7 @@ function process() {
 	});
 	html += "</table>";
 	$("#out").html(html);
+	return true;
 }
 
 
@@ -442,9 +445,9 @@ $(document).ready(function() {
 		keyup: function(event) {
 			if (event.keyCode == 13)
 				process();
-		},
-		blur: process
+		}
 	});
+	$("#find").click(process);
 	$("#helpme").click(function() {
 		$("#help").toggle();
 	});
@@ -523,7 +526,7 @@ m#trinity   → показать все части Тринити из мезо-
 <table>
 <tr>
 	<td>
-	<label for="query">WTB query:</label>
+	<label for="query"><button id="find">Find</button></label>
 	<td>
 	<input id="query" type="text" autofocus></input>
 <!--tr>
