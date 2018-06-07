@@ -303,6 +303,13 @@ function item_clicked(event, item, sub) {
 	} else if (item != 'forma') {
 		// navigate to market page
 		var cname = item + ' prime ' + ab_decode(sub);
+		switch (class_of(item)) {
+		case 'warframe':
+		case 'archwing':
+			if (sub != 'bp')
+				cname = cname.replace(' blueprint', '');
+			break;
+		}
 		url = 'https://warframe.market/items/' + cname.replace(/ /g, '_');
 	}
 	window.open(url, '_blank');
