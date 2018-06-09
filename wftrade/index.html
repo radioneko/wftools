@@ -89,6 +89,9 @@ var loc_en = {axi: 'Axi',
 			  cost_pack: function(cost) { return '5:' + cost.toString() + 'p'; },
 			 }
 
+// search history
+var s_history = new Array();
+var s_index = -1;
 
 var rarity_map = new Map([
 	["rare", 2],     ["r", 2], ["2", 2],
@@ -240,7 +243,6 @@ function PredicateItem(name) {
 function PredicateType(type) {
 	this.type = type.toLowerCase();
 	this.check = function(relic) {
-		return relic.is_vaulted == this.is_vaulted ? relic : false;
 		var val = this.type;
 		return filter_loot(relic, function(rarity, item, type) {
 			return type == val;
@@ -466,21 +468,19 @@ function item_clicked(event, item, sub)
 	/* prepare menu */
 	// navigate to warframe wiki page
 	$('#popup_wiki')
-		.attr('href', wiki_url(item, sub))
-		.click(hide_popup);
+		.attr('href', wiki_url(item, sub));
 	$('#popup_market')
-		.attr('href', market_url(item, sub))
-		.click(hide_popup);
-	$('#popup_prime').click(function() {
+		.attr('href', market_url(item, sub));
+	$('#popup_prime').off('click').click(function() {
 		$('#query').val('#' + item);
 		$('#popup').hide();
-		process();
+		find_clicked();
 		return false;
 	});
-	$('#popup_part').click(function() {
+	$('#popup_part').off('click').click(function() {
 		$('#query').val('#' + item + '/' + sub);
 		$('#popup').hide();
-		process();
+		find_clicked();
 		return false;
 	});
 	$('#popup').css({'position': 'fixed', 'left': event.pageX, 'top': event.pageY}).show();
@@ -489,7 +489,7 @@ function item_clicked(event, item, sub)
 function relic_clicked(event, era, name)
 {
 	$('#query').val(era.charAt(0) + name);
-	process();
+	find_clicked();
 	return false;
 }
 
@@ -514,6 +514,8 @@ function pred_apply(pred) {
 
 function process() {
 	var pred = parse($('#query').val());
+	if (!pred)
+		return false;
 	var out = pred_apply(pred);
 	var html = "<table class=\"rewards\"><tr><th>Relic</th><th>Rare</th><th>Uncommon</th><th>Common</th>";
 	out.forEach(function(r, idx, arr) {
@@ -536,16 +538,60 @@ function process() {
 }
 
 
+function update_history_state()
+{
+	$('#forward').prop('disabled', s_index + 2 >= s_history.length);
+	$('#back').prop('disabled', s_index < 0);
+}
+
+function find_clicked()
+{
+	if (process()) {
+		console.log('before: ' + s_history)
+		if (s_history.length == 0) {
+			s_history.push($('#query').val());
+			s_index = -1;
+		} else {
+			s_history.splice(s_index + 2, s_history.length, $('#query').val());
+			s_index++;
+		}
+		update_history_state();
+	}
+	return true;
+}
+
+
 $(document).ready(function() {
+	s_history = new Array();
+	s_index = -1;
+	update_history_state();
 	$("#query").on({
 		keyup: function(event) {
 			if (event.keyCode == 13)
-				process();
+				find_clicked();
 		}
 	});
-	$("#find").click(process);
+	$("#find").click(find_clicked);
 	$("#helpme").click(function() {
 		$("#help").toggle();
+	});
+	$('#popup_wiki').click(hide_popup);
+	$('#popup_market').click(hide_popup);
+	$('#back').click(function() {
+		if (s_index >= 0) {
+			$('#query').val(s_history[s_index]);
+			s_index--;
+			process();
+			update_history_state();
+		}
+	});
+	$('#forward').click(function() {
+		if (s_index + 2 < s_history.length) {
+			$('#query').val(s_history[s_index + 2]);
+			s_index++;
+			process();
+			update_history_state();
+		}
 	});
 	$(window).click(function(event) {
 		if (!event.target.matches('table.rewards div'))
@@ -629,7 +675,7 @@ l#forma@c** → выбрать не-vaulted реликвии с common-форм�
 	<td>
 	<label for="query"><button id="find">Find</button></label>
 	<td>
-	<input id="query" type="text" autofocus></input>
+	<input id="query" type="text" autofocus></input>&nbsp;<button id="back" disabled>⟲</button>&nbsp;<button id="forward" disabled>⟳</button>
 <!--tr>
 	<td>
 	<label for="lang">Language:</label>
