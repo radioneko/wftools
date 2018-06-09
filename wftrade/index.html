@@ -433,7 +433,9 @@ function process() {
 	var out = pred_apply(pred);
 	var html = "<table class=\"rewards\"><tr><th>Relic</th><th>Rare</th><th>Uncommon</th><th>Common</th>";
 	out.forEach(function(r, idx, arr) {
-		html += "<tr><td class=\"relic\" onclick=\"relic_clicked(event, '" + r.era + "', '" + r.name + "')\">" + r.era + "&nbsp;" + r.name.toUpperCase();
+		html += "<tr><td class=\"relic\" onclick=\"relic_clicked(event, '" + r.era + "', '" + r.name + "')\">"
+		     + r.era + "&nbsp;" + r.name.toUpperCase()
+			 + (r.is_vaulted ? '&nbsp;(vaulted)' : '');
 		var rt = [new Array(), new Array(), new Array()];
 		r.loot.forEach(function(l, idx, arr) {
 			rt[l[0]].push("<div onclick=\"item_clicked(event, '" + l[1] + "', '" + l[2] + "')\">" + l[1] + "/" + l[2] + "</div>");

@@ -59,9 +59,10 @@ class Relic:
             cn.append("bp")
         return (rarity, cn[0], cn[1] if len(cn) > 1 else '')
 
-    def __init__(self, era, name, drop):
+    def __init__(self, era, name, drop, is_vaulted):
         self.era = era
         self.name = name
+        self.is_vaulted = is_vaulted
         self.drop = [Relic.canonic_item(x[1], x[0]) for x in drop]
     
     def ppdrop(self, n):
@@ -88,27 +89,88 @@ class Relic:
 def h3_to_table(h3):
     n = h3.getnext()
     while n is not None:
-        if etree.iselement(n) and n.tag == 'table':
-            return n
+        if n.tag == 'h3':
+            return None
+        if etree.iselement(n) and n.tag == 'table' and n.find('tr') is not None:
+            return n.find('tr')
         n = n.getnext()
-    raise Exception('table not found after "%s"' % h3.text)
+    return n
 
+
+# Check return "class" of tr element
+# 1 => start of table
+# 2 => end of table
+# 0 => intermediate row
+def classify_tr(tr):
+    if tr is None or tr.attrib.get('class') == 'blank-row':
+        return 2
+    if tr.find('th') is not None:
+        return 1
+    return 0
+
+# Extract array or table rows from 'tr/th' till empty line
+# return triplet (next-row, table-header, table-rows)
+def extract_table(tr):
+    # Find "header"
+    while classify_tr(tr) not in (1, 2):
+        tr = tr.getnext()
+    if tr is None:
+        return (None, None, None)
+
+    # Process "body"
+    rows = []
+    name = tr.find('th').text
+    tr = tr.getnext()
+    while classify_tr(tr) != 2:
+        row = [cell.text for cell in tr.findall('th') or tr.findall('td')]
+        rows.append(row)
+        tr = tr.getnext()
+
+    return (tr.getnext() if tr is not None else None, name, rows)
+
+# Extract tables collection after header
+# 1) find h3 containing specified text
+def extract_tables(root):
+    sections = root.xpath('//h3')
+    data = dict()
+    for h in sections:
+        items = []
+        tr = h3_to_table(h)
+        while tr is not None:
+            (tr, name, rows) = extract_table(tr)
+            if name is not None:
+                items.append((name, rows))
+        data[h.text] = items
+    return data
+
+
+
+def grep_relic_rewards(missions):
+    relics = []
+    for m in missions:
+        for rw in m[1]:
+            r = rw[0 if len(rw) <= 2 else 1].lower().split(' ')
+            if len(r) == 3 and r[2] == 'relic':
+                relics.append(r[0] + ' ' + r[1])
+    return relics
 
 # Parse relic drops from table node
 def parse_relics(t):
+    # Find all droppable relics
+    droppable_relics = set()
+    droppable_relics.update(grep_relic_rewards(t['Missions:']))
+    droppable_relics.update(grep_relic_rewards(t['Cetus Bounty Rewards:']))
+
+    # Fill relics array
     relics = []
-    for n in t.xpath('tr/th[@colspan = 2]'):
-        desc = n.text.lower().split(' ')
+    for n in t['Relics:']:
+        desc = n[0].lower().split(' ')
         if len(desc) > 3 and desc[2] == 'relic' and desc[3] == '(intact)':
             # read drop
-            drop=[]
-            tr = n.getparent().getnext()
-            for i in range(6):
-                cells = tr.findall('td')
-                drop.append((cells[0].text, rarity_a2i[cells[1].text]))
-                tr = tr.getnext()
-            relics.append(Relic(desc[0], desc[1], drop))
-            #print('%s %s => %s' % (desc[0], desc[1], ' || '.join(drop)))
+            drop = []
+            for cells in n[1]:
+                drop.append((cells[0], rarity_a2i[cells[1]]))
+            relics.append(Relic(desc[0], desc[1], drop, (desc[0] + ' ' + desc[1]) not in droppable_relics))
     return relics
 
 
@@ -123,12 +185,11 @@ def build_classifier(rr):
 
 doc = lxml.html.parse(sys.argv[1])
 root = doc.getroot()
-r = root.xpath("//h3[text() = 'Relics:']")
-t = h3_to_table(r[0])
-rr = parse_relics(t)
+tbl = extract_tables(root)
+rr = parse_relics(tbl)
 print("function build_pool() { return [");
 for r in rr:
-    print("  {era: '%s', name: '%s', loot: %s}," % (r.era, r.name, r.loot()))
+    print("  {era: '%s', name: '%s', is_vaulted: %s, loot: %s}," % (r.era, r.name, 'true' if r.is_vaulted else 'false', r.loot()))
 print("];}")
 
 # Now make classifier function
