@@ -178,7 +178,6 @@ function filter_loot(relic, filter) {
 	});
 	if (items.length == 0)
 		return false;
-	//console.log(relic.era + " " + relic.name + ": " + items.join('; '));
 	var filtered = dup(relic);
 	filtered.loot = items;
 	return filtered;
@@ -547,7 +546,6 @@ function update_history_state()
 function find_clicked()
 {
 	if (process()) {
-		console.log('before: ' + s_history)
 		if (s_history.length == 0) {
 			s_history.push($('#query').val());
 			s_index = -1;
