@@ -235,10 +235,12 @@ function PredicateItem(name) {
 	}
 }
 
+
 // filter loot table by item type
 function PredicateType(type) {
 	this.type = type.toLowerCase();
 	this.check = function(relic) {
+		return relic.is_vaulted == this.is_vaulted ? relic : false;
 		var val = this.type;
 		return filter_loot(relic, function(rarity, item, type) {
 			return type == val;
@@ -264,6 +266,18 @@ function PredicateRarity(rty) {
 		this.check = function(relic) { return false; };
 		this.print = function() { return "BAD_RARITY"; }
 	}
+}
+
+// filter by relic's vaulted flag
+function PredicateVaulted(is_vaulted)
+{
+	this.is_vaulted = is_vaulted;
+	this.check = function(relic) {
+		return relic.is_vaulted == this.is_vaulted ? relic : false;
+	};
+	this.print = function() {
+		return this.is_vaulted ? '*' : '**';
+	};
 }
 
 function PredicateAll() {
@@ -319,6 +333,10 @@ function PredicateAny()
 
 function predicate_from_single_token(token)
 {
+	if (token == '*')
+		return new PredicateVaulted(true);
+	if (token == '**')
+		return new PredicateVaulted(false);
 	switch (token.charAt(0)) {
 	case '#':	return new PredicateItem(token.substring(1));
 	case '@':   return new PredicateRarity(token.substring(1));
@@ -332,6 +350,7 @@ function predicate_from_single_token(token)
 	if (token.length == 2) {
 		return new PredicateName(token);
 	}
+	return false;
 }
 
 function predicate_from_token(token)
@@ -374,7 +393,7 @@ function parse(query) {
 	var token = "";
 	for (var i = 0; i < query.length; i++) {
 		var ch = query.charAt(i);
-		if ((ch == '#' || ch == '/' || ch == '@') && token.length > 0) {
+		if ((ch == '#' || ch == '/' || ch == '@' || (ch == '*' && token != '*')) && token.length > 0) {
 			pred.push(predicate_from_token(token));
 			token = "";
 		}
@@ -590,13 +609,18 @@ $(document).ready(function() {
 	<div>
 	@r → показать все редкие вещи
 	</div>
+
+	<li><span>*</span>&nbsp;—&nbsp;выбрать только vaulted-реликвии
+
+	<li><span>**</span>&nbsp;—&nbsp;выбрать только не-vaulted реликвии
 </ul>
 
 По отдельности все эти штуки не шибко полезны, но их можно комбинировать!<br>
 <div>
 #nyx@r      → найти все редкие части Никс<br>
 #ash/sys@u  → показать uncommon систему Эша<br>
-m#trinity   → показать все части Тринити из мезо-эры
+m#trinity   → показать все части Тринити из мезо-эры<br>
+l#forma@c** → выбрать не-vaulted реликвии с common-формой
 </div>
 </div>
 
