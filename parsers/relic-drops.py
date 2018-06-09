@@ -2,7 +2,6 @@
 import lxml.etree as etree
 import lxml.html
 import sys
-import collections
 import json
 
 part_abname = {'blueprint': 'bp',
@@ -44,12 +43,12 @@ def canonic_reward_name(name):
     return '--'.join(cn)
 
 
-class Relic:
+class Loot:
     # make canonic triplet out of item name
     # 1. convert to lower case
     # 2. remove " prime " from name
     # 3. abbreviate blueprint,systems etc
-    def canonic_item(rarity, name):
+    def __init__(self, rarity, name):
         cn = name.lower().split(' prime ')
         if len(cn) > 1 and part_abname.get(cn[1]):
             cn[1] = part_abname[cn[1]]
@@ -57,13 +56,21 @@ class Relic:
         if len(cn) == 1 and cn[0] == "forma blueprint":
             cn[0] = "forma"
             cn.append("bp")
-        return (rarity, cn[0], cn[1] if len(cn) > 1 else '')
+        # Set fields
+        self.rarity = rarity
+        self.item = cn[0]
+        self.sub = cn[1]
+        self.is_vaulted = False
 
+    def to_dict(self):
+        return {'rty': self.rarity, 'item': self.item, 'sub': self.sub, 'is_vaulted': self.is_vaulted}
+
+class Relic:
     def __init__(self, era, name, drop, is_vaulted):
         self.era = era
         self.name = name
         self.is_vaulted = is_vaulted
-        self.drop = [Relic.canonic_item(x[1], x[0]) for x in drop]
+        self.drop = [Loot(x[1], x[0]) for x in drop]
     
     def ppdrop(self, n):
         cc = None;
@@ -79,7 +86,7 @@ class Relic:
             return self.drop[n]
 
     def loot(self):
-        return list(map(lambda x: list(x), self.drop))
+        return json.dumps(list(map(lambda x: x.to_dict(), self.drop)))
 
     def key(self):
         era_map = {'axi': 'a', 'neo': 'n', 'meso': 'm', 'lith': 'l'}
@@ -171,6 +178,17 @@ def parse_relics(t):
             for cells in n[1]:
                 drop.append((cells[0], rarity_a2i[cells[1]]))
             relics.append(Relic(desc[0], desc[1], drop, (desc[0] + ' ' + desc[1]) not in droppable_relics))
+
+    # Build available loot
+    available_loot = set()
+    for r in relics:
+        if not r.is_vaulted:
+            for l in r.drop:
+                available_loot.update([l.item + '/' + l.sub])
+    for r in relics:
+        if r.is_vaulted:
+            for l in r.drop:
+                l.is_vaulted = (l.item + '/' + l.sub) not in available_loot
     return relics
 
 
@@ -179,8 +197,8 @@ def build_classifier(rr):
     cls = dict()
     for r in rr:
         for l in r.drop:
-            if klassifier.get(l[2]):
-                cls[l[1]] = klassifier[l[2]]
+            if klassifier.get(l.sub):
+                cls[l.item] = klassifier[l.sub]
     return cls
 
 doc = lxml.html.parse(sys.argv[1])

@@ -3,6 +3,10 @@
 <title>Warframe trade text generator</title>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style>
+.vaulted {
+	text-decoration: line-through;
+}
+
 td.r2 {
 	background: #ede268;
 }
@@ -165,7 +169,7 @@ function merge_loot_tables(aloot) {
 // return false if filter returned empty loot list or relic copy
 function filter_loot(relic, filter) {
 	var items = relic.loot.filter(function(x) {
-		return filter(x[0], x[1], x[2]);
+		return filter(x.rty, x.item, x.sub);
 	});
 	if (items.length == 0)
 		return false;
@@ -433,12 +437,15 @@ function process() {
 	var out = pred_apply(pred);
 	var html = "<table class=\"rewards\"><tr><th>Relic</th><th>Rare</th><th>Uncommon</th><th>Common</th>";
 	out.forEach(function(r, idx, arr) {
-		html += "<tr><td class=\"relic\" onclick=\"relic_clicked(event, '" + r.era + "', '" + r.name + "')\">"
-		     + r.era + "&nbsp;" + r.name.toUpperCase()
-			 + (r.is_vaulted ? '&nbsp;(vaulted)' : '');
+		html += "<tr><td class=\"relic"
+			 + (r.is_vaulted ? ' vaulted' : '')
+			 + "\" onclick=\"relic_clicked(event, '" + r.era + "', '" + r.name + "')\">"
+		     + r.era + "&nbsp;" + r.name.toUpperCase();
 		var rt = [new Array(), new Array(), new Array()];
 		r.loot.forEach(function(l, idx, arr) {
-			rt[l[0]].push("<div onclick=\"item_clicked(event, '" + l[1] + "', '" + l[2] + "')\">" + l[1] + "/" + l[2] + "</div>");
+			rt[l.rty].push("<div"
+							+ (l.is_vaulted ? ' class="vaulted"' : '')
+							+ " onclick=\"item_clicked(event, '" + l.item + "', '" + l.sub + "')\">" + l.item + "/" + l.sub + "</div>");
 		});
 		for (var i = 2; i >= 0; i--)
 			html += '<td class="r' + i + '">' + rt[i].join('');
