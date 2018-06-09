@@ -103,6 +103,8 @@ var era_map = new Map([
 	["lith", "lith"], ["l", "lith"]
 ]);
 
+var era_order = {'lith': 0, 'meso': 1, 'neo': 2, 'axi': 3}
+
 function push_relics(bo, arr, name) {
 	if (arr.length) {
 		bo.push(name + ' ' + arr.join('/'));
@@ -289,7 +291,33 @@ function PredicateAll() {
 	}
 }
 
-function predicate_from_token(token)
+
+// "any" predicate: apply all predicates then merge results
+function PredicateAny()
+{
+	this.cond = new Array();
+	this.check = function(relic) {
+		var loot = new Array();
+		var success = false;
+		this.cond.forEach(function(pred, arr) {
+			var r = pred.check(relic);
+			if (r) {
+				loot.push(r.loot);
+				success = true;
+			}
+		});
+		if (!success)
+			return false;
+		var r = dup(relic);
+		r.loot = merge_loot_tables(loot);
+		return r;
+	}
+	this.push = function(pred) {
+		this.cond.push(pred);
+	}
+}
+
+function predicate_from_single_token(token)
 {
 	switch (token.charAt(0)) {
 	case '#':	return new PredicateItem(token.substring(1));
@@ -303,6 +331,33 @@ function predicate_from_token(token)
 	}
 	if (token.length == 2) {
 		return new PredicateName(token);
+	}
+}
+
+function predicate_from_token(token)
+{
+	var t_pre = '', t_body = token;
+	switch (token.charAt(0)) {
+	case '#': case '@': case '/':
+		t_pre = token.charAt(0);
+		t_body = token.substring(1);
+	}
+	var pred = false, tokens;
+	if (t_body.indexOf(',') != -1) {
+		pred = new PredicateAny();
+		tokens = t_body.split(',');
+	} else if (t_body.indexOf('+') != -1) {
+		pred = new PredicateAll();
+		tokens = t_body.split('+');
+	}
+
+	if (pred) {
+		tokens.forEach(function (elt) {
+			pred.push(predicate_from_single_token(t_pre + elt));
+		});
+		return pred;
+	} else {
+		return predicate_from_single_token(token);
 	}
 }
 
@@ -429,6 +484,12 @@ function pred_apply(pred) {
 		if (r)
 			out.push(r);
 	});
+	out.sort(function(a,b) {
+		var ea = era_order[a.era], eb = era_order[b.era];
+		if (ea != eb)
+			return ea < eb ? -1 : 1;
+		return a.name < b.name ? -1 : 1;
+	});
 	return out;
 }
 
@@ -552,7 +613,7 @@ m#trinity   → показать все части Тринити из мезо-
 	<select id="lang">
 		<option value="en">English</option>
 		<option value="ru">Russian</option>
-	</select-->
+	</select>
 <tr>
 	<td>
 	<button id="test">Copy</button>
@@ -562,7 +623,7 @@ m#trinity   → показать все части Тринити из мезо-
 	<td>
 	<button>Copy</button>
 	<td>
-	<textarea id="wtb_ru" disabled="true"></textarea>
+	<textarea id="wtb_ru" disabled="true"></textarea-->
 </table>
 
 <div id="out">
