@@ -406,7 +406,7 @@ function item_clicked(event, item, sub)
 		find_clicked();
 		return false;
 	});
-	$('#popup').css({'position': 'fixed', 'left': event.pageX, 'top': event.pageY}).show();
+	$('#popup').css({'position': 'fixed', 'left': event.clientX, 'top': event.clientY}).show();
 }
 
 function relic_clicked(event, era, name)
