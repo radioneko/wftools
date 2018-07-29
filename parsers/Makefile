@@ -17,3 +17,6 @@ bak:
 	xz $(DROPTBL_BAK)
 	cp -a $(POOLJS) $(POOLJS_BAK)
 	xz $(POOLJS_BAK)
+
+ff: $(POOLJS)
+	firefox $(dir $(POOLJS))/index.html
