@@ -38,6 +38,40 @@ function push_relics(bo, arr, name) {
 	}
 }
 
+function BuyOrder() {
+	this.lookup = new Map();	// name => index
+	this.items = new Array();	// [{era: XX, name: YY}]
+	this.put = function(era, name) {
+		var rid = era + name;
+		var idx = this.lookup[rid];
+		if (idx == undefined) {
+			this.lookup[rid] = this.items.length;
+			this.items.push({"era": era, "name": name});
+			return true;
+		}
+		return false;
+	}
+	this.remove = function(era, name) {
+		var rid = era + name;
+		var idx = this.lookup[rid];
+		if (idx != undefined) {
+			this.items.splice(idx, 1);
+			delete this.lookup[rid];
+			var lookup = this.lookup;
+			this.items.forEach(function(r, idx) {
+				lookup[r.era + r.name] = idx;
+			});
+			return true;
+		}
+		return false;
+	}
+	this.contains = function(era, name) {
+		return this.lookup[era + name] != undefined;
+	}
+}
+
+var order = new BuyOrder();
+
 
 function RelicPack()
 {
@@ -435,25 +469,71 @@ function pred_apply(pred) {
 	return out;
 }
 
+
+/* draw relic list */
+function bo_render()
+{
+	var s = '';
+	var bo_en = new Array();
+	var bo_ru = new Array();
+	var name_en = {'axi': 'Axi', 'neo': 'Neo', 'meso': 'Meso', 'lith': 'Lith'};
+	var name_ru = {'axi': 'акси', 'neo': 'нео', 'meso': 'мезо', 'lith': 'лит'};
+	order.items.forEach(function (r) {
+		s += '<span onclick="bo_remove(\'' + r.era + '\', \'' + r.name + '\')">' + r.era + '&nbsp;' + r.name + '</span>';
+		bo_en.push('[' + name_en[r.era] + ' ' + r.name.toUpperCase() + ' relic]');
+		bo_ru.push('[реликвия ' + name_ru[r.era] + ' ' + r.name.toUpperCase() + ']');
+	});
+	$('#wtbs').html(s);
+	$('#wtb_en').text('WTB ' + bo_en.join(' '));
+	$('#wtb_ru').text('Куплю ' + bo_ru.join(' '));
+}
+
+function bo_remove(era, name)
+{
+	order.remove(era, name);
+//	$('#bo' + era + name).attr('checked', false);
+	var elt = document.getElementById('bo' + era + name);
+	if (elt) {
+		elt.checked = false;
+	}
+	bo_render();
+}
+
+function bo_clicked(event, era, name)
+{
+	if (event.target.checked) {
+		order.put(era, name);
+	} else {
+		order.remove(era, name);
+	}
+	bo_render();
+	return false;
+}
+
 function process() {
 	var pred = parse($('#query').val());
 	if (!pred)
 		return false;
 	var out = pred_apply(pred);
-	var html = "<table class=\"rewards\"><tr><th>Relic</th><th>Rare</th><th>Uncommon</th><th>Common</th>";
-	out.forEach(function(r, idx, arr) {
+	var html = "<table class=\"rewards\"><tr><th>Relic</th><th>Rare</th><th>Uncommon</th><th>Common</th><th>WTB</th>";
+	out.forEach(function(r) {
 		html += "<tr><td class=\"relic"
 			 + (r.is_vaulted ? ' vaulted' : '')
 			 + "\" onclick=\"relic_clicked(event, '" + r.era + "', '" + r.name + "')\">"
 		     + r.era + "&nbsp;" + r.name.toUpperCase();
 		var rt = [new Array(), new Array(), new Array()];
-		r.loot.forEach(function(l, idx, arr) {
+		r.loot.forEach(function(l) {
 			rt[l.rty].push("<div"
 							+ (l.is_vaulted ? ' class="vaulted"' : '')
 							+ " onclick=\"item_clicked(event, '" + l.item + "', '" + l.sub + "')\">" + l.item + "/" + l.sub + "</div>");
 		});
 		for (var i = 2; i >= 0; i--)
 			html += '<td class="r' + i + '">' + rt[i].join('');
+		// add to buy offer
+		chkid = 'bo' + r.era + r.name;
+		var is_checked = order.contains(r.era, r.name) ? ' checked' : '';
+		html += '<td><label class="switch"><input id="' + chkid + '" type="checkbox"' + is_checked
+			+ ' onclick="bo_clicked(event, \'' + r.era + '\', \'' + r.name + '\')"><span class="slider round"></span></label>';
 	});
 	html += "</table>";
 	$("#out").html(html);
